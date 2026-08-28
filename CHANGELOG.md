@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Enforce producer-side byte/record ceilings in catalog and background helpers (line, field, record, and total JSON limits)
+- Terminate catalog/background processes from QML when streamed stdout exceeds the producer contract limit
+
+## [1.0.1] - 2026-08-29
+
+### Security
+
 - Enforce strict theme slug allowlist before shell commands and path construction
 - Read plugin state and current theme through no-follow regular-file helpers with byte limits
 - Write plugin state atomically via verified private-directory helper

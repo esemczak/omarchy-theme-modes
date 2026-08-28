@@ -116,6 +116,7 @@ omarchy-theme-modes/
 ├── bootstrap-state.sh   # Safe read of plugin state + current theme
 ├── safe-write-state.sh  # Atomic bounded write of plugin state
 ├── catalog.sh           # Theme list + preview paths
+├── theme-list-fallback.sh # Bounded fallback theme catalog JSON
 ├── backgrounds.sh       # Background list for a theme slug
 ├── docs/screenshots/  # README screenshots
 ├── LICENSE
@@ -159,6 +160,7 @@ Hardening measures in this release:
 - Theme slugs are validated against a strict allowlist before any shell command or path construction runs.
 - Plugin state and the current theme name are read through no-follow, regular-file helpers with byte limits; state is written atomically into a verified private directory.
 - Theme/background catalog helpers run under `timeout`, cap stdout before QML parsing, and only expose image paths that resolve under anchored Omarchy theme/background or cache roots after no-follow regular-file checks.
+- Catalog and background helpers enforce producer-side ceilings on input line bytes, field/path bytes, record counts, and total emitted JSON bytes; QML collectors terminate processes once stdout exceeds the matching limit during streaming.
 
 ## License
 

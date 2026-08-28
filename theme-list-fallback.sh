@@ -40,21 +40,15 @@ find_preview() {
 build_theme_record() {
   local name="$1"
   local slug="$2"
-  local preview="$3"
 
   field_within_limit "$name" "$THEME_MODES_MAX_NAME_BYTES" || return 1
   field_within_limit "$slug" "$THEME_MODES_MAX_FIELD_BYTES" || return 1
-  if [[ -n $preview ]]; then
-    field_within_limit "$preview" "$THEME_MODES_MAX_FIELD_BYTES" || preview=""
-  fi
   jq -cn \
     --arg name "$name" \
     --arg slug "$slug" \
-    --arg preview "$preview" \
+    --arg preview "" \
     '{name:$name, slug:$slug, previewPath:$preview}'
 }
-
-timeout 20s omarchy-theme-switcher --preload >/dev/null 2>&1 || true
 
 json_emit_reset
 while IFS= read -r raw_name; do
@@ -63,9 +57,7 @@ while IFS= read -r raw_name; do
   [[ -n $name ]] || continue
   slug=$(slugify_name "$name" 2>/dev/null || true)
   [[ -n $slug ]] || continue
-  preview=""
-  preview=$(find_preview "$slug" 2>/dev/null || true)
-  record=$(build_theme_record "$name" "$slug" "$preview" 2>/dev/null || true)
+  record=$(build_theme_record "$name" "$slug" 2>/dev/null || true)
   [[ -n $record ]] || continue
   json_emit_record "$record" "$THEME_MODES_MAX_CATALOG_JSON_BYTES" "$THEME_MODES_MAX_CATALOG_RECORDS" || break
 done < <(bounded_theme_names)

@@ -198,6 +198,18 @@ Item {
     return "'" + String(value || "").replace(/'/g, "'\\''") + "'"
   }
 
+  function stdoutOverLimit(text, limit) {
+    return String(text || "").length > limit
+  }
+
+  function abortIfStdoutOverLimit(process, collector, limit, onAbort) {
+    if (!process.running) return false
+    if (!stdoutOverLimit(collector.text, limit)) return false
+    process.running = false
+    if (onAbort) onAbort()
+    return true
+  }
+
   function loadState(raw, currentThemeSlug) {
     state = Model.parseStateFile(raw, currentThemeSlug)
     stateLoaded = true
@@ -267,9 +279,14 @@ Item {
     id: stateLoader
     command: ["bash", root.pluginDir + "/bootstrap-state.sh"]
     stdout: StdioCollector {
+      id: stateLoaderStdout
       waitForEnd: true
+      onDataChanged: root.abortIfStdoutOverLimit(stateLoader, stateLoaderStdout, Model.MAX_STATE_CHARS + 512, function() {
+        if (!root.stateLoaded) root.loadState("", "")
+      })
       onStreamFinished: {
-        var payload = Model.parseBootstrapPayload(text)
+        if (root.stdoutOverLimit(stateLoaderStdout.text, Model.MAX_STATE_CHARS + 512)) return
+        var payload = Model.parseBootstrapPayload(stateLoaderStdout.text)
         root.loadState(payload.state, payload.currentTheme)
       }
     }
@@ -291,10 +308,17 @@ Item {
     id: catalogProcess
     command: ["timeout", "25s", "bash", root.pluginDir + "/catalog.sh"]
     stdout: StdioCollector {
+      id: catalogStdout
       waitForEnd: true
-      onStreamFinished: {
+      onDataChanged: root.abortIfStdoutOverLimit(catalogProcess, catalogStdout, Model.MAX_CATALOG_OUTPUT_CHARS, function() {
         catalogTimeout.stop()
-        var parsed = Model.parseThemeCatalog(text)
+        root.loadingThemes = false
+        root.lastError = "Theme catalog output too large"
+      })
+      onStreamFinished: {
+        if (root.stdoutOverLimit(catalogStdout.text, Model.MAX_CATALOG_OUTPUT_CHARS)) return
+        catalogTimeout.stop()
+        var parsed = Model.parseThemeCatalog(catalogStdout.text)
         if (parsed.length > 0) {
           root.themes = parsed
         } else {
@@ -316,13 +340,19 @@ Item {
 
   Process {
     id: themeListFallbackProcess
-    command: ["timeout", "25s", "bash", "-lc", "omarchy theme list | head -n 512"]
+    command: ["timeout", "25s", "bash", root.pluginDir + "/theme-list-fallback.sh"]
     stdout: StdioCollector {
+      id: themeListFallbackStdout
       waitForEnd: true
-      onStreamFinished: {
+      onDataChanged: root.abortIfStdoutOverLimit(themeListFallbackProcess, themeListFallbackStdout, Model.MAX_CATALOG_OUTPUT_CHARS, function() {
         themeListFallbackTimeout.stop()
-        var parsed = Model.parseThemeCatalog(text)
-        root.themes = parsed.length > 0 ? parsed : Model.parseThemeList(text)
+        root.lastError = "Theme list output too large"
+      })
+      onStreamFinished: {
+        if (root.stdoutOverLimit(themeListFallbackStdout.text, Model.MAX_CATALOG_OUTPUT_CHARS)) return
+        themeListFallbackTimeout.stop()
+        var parsed = Model.parseThemeCatalog(themeListFallbackStdout.text)
+        if (parsed.length > 0) root.themes = parsed
       }
     }
     onExited: function() {
@@ -334,12 +364,20 @@ Item {
     id: backgroundsProcess
     property int requestId: 0
     stdout: StdioCollector {
+      id: backgroundsStdout
       waitForEnd: true
+      onDataChanged: root.abortIfStdoutOverLimit(backgroundsProcess, backgroundsStdout, Model.MAX_BACKGROUND_OUTPUT_CHARS, function() {
+        backgroundsTimeout.stop()
+        root.backgrounds = []
+        root.loadingBackgrounds = false
+        root.lastError = "Background catalog output too large"
+      })
       onStreamFinished: {
+        if (root.stdoutOverLimit(backgroundsStdout.text, Model.MAX_BACKGROUND_OUTPUT_CHARS)) return
         backgroundsTimeout.stop()
         if (backgroundsProcess.requestId !== root.backgroundsRequestId) return
         var slug = root.backgroundsSlug
-        var items = Model.parseBackgroundCatalog(text)
+        var items = Model.parseBackgroundCatalog(backgroundsStdout.text)
         root.backgrounds = items
         root.loadingBackgrounds = false
         if (slug === Model.slugFromName(root.state.lightTheme))

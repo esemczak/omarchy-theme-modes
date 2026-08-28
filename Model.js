@@ -1,7 +1,13 @@
 .pragma library
 
 var STATE_PATH_SUFFIX = "/.local/state/omarchy/settings/theme-modes.json"
-var MAX_OUTPUT_CHARS = 1048576
+var MAX_OUTPUT_CHARS = 524288
+var MAX_CATALOG_OUTPUT_CHARS = 524288
+var MAX_BACKGROUND_OUTPUT_CHARS = 524288
+var MAX_CATALOG_RECORDS = 256
+var MAX_BACKGROUND_RECORDS = 256
+var MAX_INPUT_LINE_CHARS = 256
+var MAX_FIELD_CHARS = 4096
 var MAX_STATE_CHARS = 65536
 
 function statePath(home) {
@@ -145,21 +151,24 @@ function parseThemeList(raw) {
 }
 
 function parseThemeCatalog(raw) {
-  var text = clampText(raw, MAX_OUTPUT_CHARS)
+  var text = clampText(raw, MAX_CATALOG_OUTPUT_CHARS)
   if (!text.trim()) return []
   try {
     var parsed = JSON.parse(text)
     if (!Array.isArray(parsed)) return []
     var themes = []
     var seen = {}
-    for (var i = 0; i < parsed.length; i++) {
+    var limit = Math.min(parsed.length, MAX_CATALOG_RECORDS)
+    for (var i = 0; i < limit; i++) {
       var entry = parsed[i]
       if (!entry || typeof entry !== "object") continue
       var name = String(entry.name || "").trim()
+      if (name.length > MAX_INPUT_LINE_CHARS) name = name.slice(0, MAX_INPUT_LINE_CHARS)
       var slug = slugFromName(entry.slug || name)
       if (!name || !slug || seen[slug]) continue
       var previewPath = String(entry.previewPath || "").trim()
-      if (previewPath && !isSafeLocalPath(previewPath)) previewPath = ""
+      if (previewPath && (!isSafeLocalPath(previewPath) || previewPath.length > MAX_FIELD_CHARS))
+        previewPath = ""
       seen[slug] = true
       themes.push({
         name: name,
@@ -200,20 +209,22 @@ function backgroundInList(path, backgrounds) {
 }
 
 function parseBackgroundCatalog(raw) {
-  var text = clampText(raw, MAX_OUTPUT_CHARS)
+  var text = clampText(raw, MAX_BACKGROUND_OUTPUT_CHARS)
   if (!text.trim()) return []
   try {
     var parsed = JSON.parse(text)
     if (!Array.isArray(parsed)) return []
     var items = []
     var seen = {}
-    for (var i = 0; i < parsed.length; i++) {
+    var limit = Math.min(parsed.length, MAX_BACKGROUND_RECORDS)
+    for (var i = 0; i < limit; i++) {
       var entry = parsed[i]
       if (!entry || typeof entry !== "object") continue
       var path = String(entry.path || "").trim()
-      if (!isSafeLocalPath(path) || seen[path]) continue
+      if (!isSafeLocalPath(path) || path.length > MAX_FIELD_CHARS || seen[path]) continue
       var thumbnailPath = String(entry.thumbnailPath || path).trim()
-      if (!isSafeLocalPath(thumbnailPath)) thumbnailPath = path
+      if (!isSafeLocalPath(thumbnailPath) || thumbnailPath.length > MAX_FIELD_CHARS)
+        thumbnailPath = path
       seen[path] = true
       items.push({
         path: path,

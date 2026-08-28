@@ -4,9 +4,20 @@ set -euo pipefail
 
 readonly THEME_MODES_MAX_STATE_BYTES=65536
 readonly THEME_MODES_MAX_THEME_NAME_BYTES=256
-readonly THEME_MODES_MAX_SCRIPT_OUTPUT_BYTES=1048576
+readonly THEME_MODES_MAX_SCRIPT_OUTPUT_BYTES=524288
+readonly THEME_MODES_MAX_CATALOG_JSON_BYTES=524288
+readonly THEME_MODES_MAX_BACKGROUND_JSON_BYTES=524288
+readonly THEME_MODES_MAX_CATALOG_RECORDS=256
+readonly THEME_MODES_MAX_BACKGROUND_RECORDS=256
+readonly THEME_MODES_MAX_INPUT_LINE_BYTES=256
+readonly THEME_MODES_MAX_FIELD_BYTES=4096
+readonly THEME_MODES_MAX_NAME_BYTES=128
+readonly THEME_MODES_MAX_ENTRY_JSON_BYTES=16384
 readonly THEME_MODES_MAX_IMAGE_BYTES=52428800
 readonly THEME_MODES_IMAGE_EXTENSIONS='jpg jpeg png gif bmp webp'
+
+theme_modes_json_bytes=0
+theme_modes_json_records=0
 
 theme_modes_home="${HOME:?HOME is required}"
 theme_modes_state_file="$theme_modes_home/.local/state/omarchy/settings/theme-modes.json"
@@ -272,3 +283,109 @@ verify_thumbnail_path() {
   [[ -n $verified ]] || return 1
   printf '%s' "$verified"
 }
+
+field_within_limit() {
+  local value="$1"
+  local max_bytes="${2:-$THEME_MODES_MAX_FIELD_BYTES}"
+  local size
+
+  [[ -n $value ]] || return 1
+  size=$(printf '%s' "$value" | wc -c | tr -d ' ')
+  (( size <= max_bytes ))
+}
+
+clamp_input_line() {
+  local value="$1"
+  local max_bytes="${2:-$THEME_MODES_MAX_INPUT_LINE_BYTES}"
+  printf '%s' "$value" | python3 -c 'import sys; limit=int(sys.argv[1]); data=sys.stdin.read(); sys.stdout.write(data.encode("utf-8", errors="replace")[:limit].decode("utf-8", errors="ignore"))' "$max_bytes"
+}
+
+json_emit_reset() {
+  theme_modes_json_bytes=1
+  theme_modes_json_records=0
+  printf '['
+}
+
+json_emit_record() {
+  local record="$1"
+  local max_bytes="${2:-$THEME_MODES_MAX_CATALOG_JSON_BYTES}"
+  local max_records="${3:-$THEME_MODES_MAX_CATALOG_RECORDS}"
+  local record_bytes sep_bytes
+
+  if (( theme_modes_json_records >= max_records )); then
+    return 2
+  fi
+
+  record_bytes=$(printf '%s' "$record" | wc -c | tr -d ' ')
+  if (( record_bytes > THEME_MODES_MAX_ENTRY_JSON_BYTES )); then
+    return 1
+  fi
+
+  sep_bytes=0
+  if (( theme_modes_json_records > 0 )); then
+    sep_bytes=1
+  fi
+
+  if (( theme_modes_json_bytes + sep_bytes + record_bytes + 1 > max_bytes )); then
+    return 2
+  fi
+
+  if (( theme_modes_json_records > 0 )); then
+    printf ','
+  fi
+  printf '%s' "$record"
+  theme_modes_json_bytes=$((theme_modes_json_bytes + sep_bytes + record_bytes))
+  theme_modes_json_records=$((theme_modes_json_records + 1))
+  return 0
+}
+
+json_emit_finish() {
+  printf ']\n'
+  theme_modes_json_bytes=$((theme_modes_json_bytes + 1))
+}
+
+bounded_theme_names() {
+  python3 - "$THEME_MODES_MAX_CATALOG_RECORDS" "$THEME_MODES_MAX_INPUT_LINE_BYTES" <<'PY'
+import subprocess
+import sys
+
+max_lines = int(sys.argv[1])
+max_line_bytes = int(sys.argv[2])
+
+try:
+    proc = subprocess.Popen(
+        ["omarchy", "theme", "list"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+except OSError:
+    raise SystemExit(0)
+
+count = 0
+try:
+    assert proc.stdout is not None
+    for raw in proc.stdout:
+        if count >= max_lines:
+            break
+        line = raw.rstrip("\r\n")
+        encoded = line.encode("utf-8", errors="replace")
+        if len(encoded) > max_line_bytes:
+            line = encoded[:max_line_bytes].decode("utf-8", errors="ignore")
+        line = line.strip()
+        if not line:
+            continue
+        print(line)
+        count += 1
+finally:
+    if proc.stdout is not None:
+        proc.stdout.close()
+    try:
+        proc.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+PY
+}
+
