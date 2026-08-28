@@ -22,12 +22,14 @@ Panel {
   readonly property color panelBackground: Color.popups.background
   readonly property string themeTabBackgroundPath: {
     if (activeTab === "light") {
-      if (themeModes.state.lightBackground) return themeModes.state.lightBackground
-      if (lightTab.centerTheme && lightTab.centerTheme.previewPath) return lightTab.centerTheme.previewPath
+      if (Model.isSafeLocalPath(themeModes.state.lightBackground)) return themeModes.state.lightBackground
+      if (lightTab.centerTheme && Model.isSafeLocalPath(lightTab.centerTheme.previewPath))
+        return lightTab.centerTheme.previewPath
     }
     if (activeTab === "dark") {
-      if (themeModes.state.darkBackground) return themeModes.state.darkBackground
-      if (darkTab.centerTheme && darkTab.centerTheme.previewPath) return darkTab.centerTheme.previewPath
+      if (Model.isSafeLocalPath(themeModes.state.darkBackground)) return themeModes.state.darkBackground
+      if (darkTab.centerTheme && Model.isSafeLocalPath(darkTab.centerTheme.previewPath))
+        return darkTab.centerTheme.previewPath
     }
     var activeBg = Model.backgroundForMode(themeModes.state)
     if (activeBg) return activeBg
@@ -49,11 +51,17 @@ Panel {
     return 0
   }
 
+  function safeImagePath(path) {
+    return Model.isSafeLocalPath(path) ? String(path) : ""
+  }
+
   function previewPathForSlug(slug) {
     var key = Model.slugFromName(slug)
     for (var i = 0; i < themeModes.themes.length; i++) {
-      if (themeModes.themes[i].slug === key && themeModes.themes[i].previewPath)
-        return themeModes.themes[i].previewPath
+      if (themeModes.themes[i].slug === key) {
+        var path = String(themeModes.themes[i].previewPath || "")
+        return Model.isSafeLocalPath(path) ? path : ""
+      }
     }
     return ""
   }
@@ -1116,7 +1124,7 @@ Panel {
                 property int themeIndex: index % picker.themes.length
                 property var themeData: picker.themes[themeIndex]
                 name: themeData.name
-                previewPath: themeData.previewPath || ""
+                previewPath: root.safeImagePath(themeData.previewPath || "")
                 distance: Math.abs(index - picker.ghostIndex)
                 cardScale: picker.scaleForDistance(Math.abs(index - picker.ghostIndex))
                 foreground: root.foreground
@@ -1208,7 +1216,7 @@ Panel {
         delegate: BackgroundThumb {
           required property var modelData
           name: modelData.name
-          imagePath: modelData.thumbnailPath || modelData.path
+          imagePath: root.safeImagePath(modelData.thumbnailPath || modelData.path)
           selected: modelData.path === picker.selectedBackground
           foreground: root.foreground
           fontFamily: root.fontFamily
@@ -1534,7 +1542,7 @@ Panel {
       id: introTimer
       running: false
       repeat: false
-      interval: 1100
+      interval: 300
       onTriggered: {
         if (bg.comicMotionActive)
           bg.runAmbientBeat()

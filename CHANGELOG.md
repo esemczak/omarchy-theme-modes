@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- Enforce strict theme slug allowlist before shell commands and path construction
+- Read plugin state and current theme through no-follow regular-file helpers with byte limits
+- Write plugin state atomically via verified private-directory helper
+- Cap catalog helper stdout, terminate stalled processes, and verify image paths under anchored roots before QML use
+
 ## [1.0.0] - 2026-08-28
 
 ### Added

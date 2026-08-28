@@ -1,21 +1,47 @@
 .pragma library
 
 var STATE_PATH_SUFFIX = "/.local/state/omarchy/settings/theme-modes.json"
+var MAX_OUTPUT_CHARS = 1048576
+var MAX_STATE_CHARS = 65536
 
 function statePath(home) {
   return String(home || "") + STATE_PATH_SUFFIX
 }
 
+function clampText(raw, max) {
+  var text = String(raw || "")
+  return text.length > max ? text.slice(0, max) : text
+}
+
+function isValidSlug(slug) {
+  var key = String(slug || "")
+  if (!key || key === "." || key === "..") return false
+  return /^[a-z0-9]+$/.test(key) || /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(key)
+}
+
 function slugFromName(name) {
-  return String(name || "")
+  var raw = String(name || "")
+  if (/[/\\]|\.\./.test(raw)) return ""
+  var cleaned = raw
     .replace(/<[^>]+>/g, "")
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]+/g, "")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .replace(/[-_]{2,}/g, function(match) { return match.charAt(0) })
+  return isValidSlug(cleaned) ? cleaned : ""
+}
+
+function isSafeLocalPath(path) {
+  var text = String(path || "").trim()
+  if (!text || text.indexOf("\0") >= 0) return false
+  if (text.indexOf("..") >= 0) return false
+  return text.charAt(0) === "/"
 }
 
 function defaultState(currentThemeSlug) {
-  var slug = String(currentThemeSlug || "").trim()
+  var slug = slugFromName(currentThemeSlug)
   return {
     lightTheme: slug || "flexoki-light",
     darkTheme: slug || "catppuccin",
@@ -33,15 +59,24 @@ function defaultState(currentThemeSlug) {
 
 function parseStateFile(raw, currentThemeSlug) {
   var base = defaultState(currentThemeSlug)
-  if (!raw || !String(raw).trim()) return base
+  var text = clampText(raw, MAX_STATE_CHARS)
+  if (!text.trim()) return base
 
   try {
-    var parsed = JSON.parse(String(raw))
+    var parsed = JSON.parse(text)
     if (!parsed || typeof parsed !== "object") return base
-    if (parsed.lightTheme) base.lightTheme = slugFromName(parsed.lightTheme)
-    if (parsed.darkTheme) base.darkTheme = slugFromName(parsed.darkTheme)
-    if (parsed.lightBackground) base.lightBackground = String(parsed.lightBackground)
-    if (parsed.darkBackground) base.darkBackground = String(parsed.darkBackground)
+    if (parsed.lightTheme) {
+      var light = slugFromName(parsed.lightTheme)
+      if (light) base.lightTheme = light
+    }
+    if (parsed.darkTheme) {
+      var dark = slugFromName(parsed.darkTheme)
+      if (dark) base.darkTheme = dark
+    }
+    if (parsed.lightBackground && isSafeLocalPath(parsed.lightBackground))
+      base.lightBackground = String(parsed.lightBackground)
+    if (parsed.darkBackground && isSafeLocalPath(parsed.darkBackground))
+      base.darkBackground = String(parsed.darkBackground)
     if (parsed.mode === "light" || parsed.mode === "dark") base.mode = parsed.mode
     if (typeof parsed.manualOverride === "boolean") base.manualOverride = parsed.manualOverride
     if (typeof parsed.autoEnabled === "boolean") base.autoEnabled = parsed.autoEnabled
@@ -58,10 +93,10 @@ function parseStateFile(raw, currentThemeSlug) {
 
 function serializeState(state) {
   return JSON.stringify({
-    lightTheme: slugFromName(state.lightTheme),
-    darkTheme: slugFromName(state.darkTheme),
-    lightBackground: String(state.lightBackground || ""),
-    darkBackground: String(state.darkBackground || ""),
+    lightTheme: slugFromName(state.lightTheme) || defaultState("").lightTheme,
+    darkTheme: slugFromName(state.darkTheme) || defaultState("").darkTheme,
+    lightBackground: isSafeLocalPath(state.lightBackground) ? String(state.lightBackground) : "",
+    darkBackground: isSafeLocalPath(state.darkBackground) ? String(state.darkBackground) : "",
     mode: state.mode === "light" ? "light" : "dark",
     manualOverride: !!state.manualOverride,
     autoEnabled: !!state.autoEnabled,
@@ -95,7 +130,7 @@ function minutesToTime(totalMinutes) {
 }
 
 function parseThemeList(raw) {
-  var lines = String(raw || "").split("\n")
+  var lines = clampText(raw, MAX_OUTPUT_CHARS).split("\n")
   var themes = []
   var seen = {}
   for (var i = 0; i < lines.length; i++) {
@@ -110,9 +145,10 @@ function parseThemeList(raw) {
 }
 
 function parseThemeCatalog(raw) {
-  if (!raw || !String(raw).trim()) return []
+  var text = clampText(raw, MAX_OUTPUT_CHARS)
+  if (!text.trim()) return []
   try {
-    var parsed = JSON.parse(String(raw))
+    var parsed = JSON.parse(text)
     if (!Array.isArray(parsed)) return []
     var themes = []
     var seen = {}
@@ -122,11 +158,13 @@ function parseThemeCatalog(raw) {
       var name = String(entry.name || "").trim()
       var slug = slugFromName(entry.slug || name)
       if (!name || !slug || seen[slug]) continue
+      var previewPath = String(entry.previewPath || "").trim()
+      if (previewPath && !isSafeLocalPath(previewPath)) previewPath = ""
       seen[slug] = true
       themes.push({
         name: name,
         slug: slug,
-        previewPath: String(entry.previewPath || "")
+        previewPath: previewPath
       })
     }
     return themes
@@ -148,12 +186,13 @@ function themeForMode(state) {
 }
 
 function backgroundForMode(state) {
-  return state.mode === "light" ? String(state.lightBackground || "") : String(state.darkBackground || "")
+  var path = state.mode === "light" ? String(state.lightBackground || "") : String(state.darkBackground || "")
+  return isSafeLocalPath(path) ? path : ""
 }
 
 function backgroundInList(path, backgrounds) {
   var target = String(path || "")
-  if (!target) return false
+  if (!isSafeLocalPath(target)) return false
   for (var i = 0; i < backgrounds.length; i++) {
     if (backgrounds[i] && backgrounds[i].path === target) return true
   }
@@ -161,25 +200,45 @@ function backgroundInList(path, backgrounds) {
 }
 
 function parseBackgroundCatalog(raw) {
-  if (!raw || !String(raw).trim()) return []
+  var text = clampText(raw, MAX_OUTPUT_CHARS)
+  if (!text.trim()) return []
   try {
-    var parsed = JSON.parse(String(raw))
+    var parsed = JSON.parse(text)
     if (!Array.isArray(parsed)) return []
     var items = []
+    var seen = {}
     for (var i = 0; i < parsed.length; i++) {
       var entry = parsed[i]
       if (!entry || typeof entry !== "object") continue
       var path = String(entry.path || "").trim()
-      if (!path) continue
+      if (!isSafeLocalPath(path) || seen[path]) continue
+      var thumbnailPath = String(entry.thumbnailPath || path).trim()
+      if (!isSafeLocalPath(thumbnailPath)) thumbnailPath = path
+      seen[path] = true
       items.push({
         path: path,
         name: String(entry.name || ""),
-        thumbnailPath: String(entry.thumbnailPath || path)
+        thumbnailPath: thumbnailPath
       })
     }
     return items
   } catch (e) {
     return []
+  }
+}
+
+function parseBootstrapPayload(raw) {
+  var text = clampText(raw, MAX_STATE_CHARS + 512)
+  if (!text.trim()) return { state: "", currentTheme: "" }
+  try {
+    var parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== "object") return { state: "", currentTheme: "" }
+    return {
+      state: clampText(parsed.state, MAX_STATE_CHARS),
+      currentTheme: clampText(parsed.currentTheme, 256)
+    }
+  } catch (e) {
+    return { state: "", currentTheme: "" }
   }
 }
 

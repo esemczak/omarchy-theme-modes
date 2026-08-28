@@ -111,8 +111,12 @@ omarchy-theme-modes/
 ├── Panel.qml          # Bar widget + panel UI
 ├── Service.qml        # State, theme apply, auto timers
 ├── Model.js           # State parse/serialize, auto logic
-├── catalog.sh         # Theme list + preview paths
-├── backgrounds.sh     # Background list for a theme slug
+├── lib/
+│   └── security.sh      # Slug/path validation and safe file helpers
+├── bootstrap-state.sh   # Safe read of plugin state + current theme
+├── safe-write-state.sh  # Atomic bounded write of plugin state
+├── catalog.sh           # Theme list + preview paths
+├── backgrounds.sh       # Background list for a theme slug
 ├── docs/screenshots/  # README screenshots
 ├── LICENSE
 └── CHANGELOG.md
@@ -146,7 +150,15 @@ omarchy plugin validate ~/.config/omarchy/plugins/esemczak.theme-modes
 
 ## Security
 
-Plugins run as unsandboxed code inside `omarchy-shell`. Review the source before installing. This plugin executes local Omarchy CLI commands and reads theme/background directories on your machine; it does not download or execute remote code.
+Plugins run as unsandboxed code inside `omarchy-shell`. Review the source before installing.
+
+This plugin executes local Omarchy CLI commands and reads theme/background directories on your machine; it does not download or execute remote code.
+
+Hardening measures in this release:
+
+- Theme slugs are validated against a strict allowlist before any shell command or path construction runs.
+- Plugin state and the current theme name are read through no-follow, regular-file helpers with byte limits; state is written atomically into a verified private directory.
+- Theme/background catalog helpers run under `timeout`, cap stdout before QML parsing, and only expose image paths that resolve under anchored Omarchy theme/background or cache roots after no-follow regular-file checks.
 
 ## License
 

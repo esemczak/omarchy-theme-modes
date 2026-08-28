@@ -2,55 +2,60 @@
 
 set -euo pipefail
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib/security.sh
+source "$script_dir/lib/security.sh"
+
 slug="${1:-}"
-if [[ -z $slug ]]; then
+if ! is_valid_slug "$slug"; then
   printf '[]\n'
   exit 0
 fi
 
-theme_dir=""
-if [[ -d $HOME/.config/omarchy/themes/$slug ]]; then
-  theme_dir="$HOME/.config/omarchy/themes/$slug"
-elif [[ -d ${OMARCHY_PATH:-/usr/share/omarchy}/themes/$slug ]]; then
-  theme_dir="${OMARCHY_PATH:-/usr/share/omarchy}/themes/$slug"
+mapfile -t roots < <(background_roots_for_slug "$slug")
+if ((${#roots[@]} == 0)); then
+  printf '[]\n'
+  exit 0
 fi
 
-user_dir="$HOME/.config/omarchy/backgrounds/$slug"
-dirs=""
+emit_entry() {
+  local path="$1"
+  local thumb="$2"
+  local base label verified_path verified_thumb
 
-if [[ -n $theme_dir && -d $theme_dir/backgrounds ]]; then
-  dirs="$theme_dir/backgrounds"
-fi
+  verified_path=$(verify_background_path "$slug" "$path" 2>/dev/null || true)
+  [[ -n $verified_path ]] || return 0
 
-if [[ -d $user_dir ]]; then
-  if [[ -n $dirs ]]; then
-    dirs+=$'\n'"$user_dir"
-  else
-    dirs="$user_dir"
+  if [[ -n $thumb ]]; then
+    verified_thumb=$(verify_thumbnail_path "$thumb" 2>/dev/null || verify_background_path "$slug" "$thumb" 2>/dev/null || true)
   fi
-fi
+  [[ -n $verified_thumb ]] || verified_thumb="$verified_path"
 
-if [[ -z $dirs ]]; then
-  printf '[]\n'
-  exit 0
-fi
+  base=$(basename -- "$verified_path")
+  label="${base%.*}"
+  jq -cn \
+    --arg path "$verified_path" \
+    --arg name "$label" \
+    --arg thumbnailPath "$verified_thumb" \
+    '{path:$path, name:$name, thumbnailPath:$thumbnailPath}'
+}
 
-list_sh="/usr/share/omarchy/shell/plugins/image-picker/list.sh"
 first=true
 printf '['
-while IFS=$'\t' read -r path thumb; do
-  [[ -n $path ]] || continue
-  base=$(basename "$path")
-  label="${base%.*}"
-  if [[ $first == true ]]; then
-    first=false
-  else
-    printf ','
-  fi
-  jq -cn \
-    --arg path "$path" \
-    --arg name "$label" \
-    --arg thumbnailPath "$thumb" \
-    '{path:$path, name:$name, thumbnailPath:$thumbnailPath}'
-done < <(bash "$list_sh" "$dirs")
+for root in "${roots[@]}"; do
+  [[ -n $root && -d $root && ! -L $root ]] || continue
+  while IFS= read -r -d '' image; do
+    [[ -n $image ]] || continue
+    entry=$(emit_entry "$image" "$image" || true)
+    [[ -n $entry ]] || continue
+    if [[ $first == true ]]; then
+      first=false
+    else
+      printf ','
+    fi
+    printf '%s' "$entry"
+  done < <(find -P "$root" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+    -print0 2>/dev/null)
+done
 printf ']\n'
