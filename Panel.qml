@@ -1295,7 +1295,152 @@ Panel {
 
     clip: true
 
-    property real wallpaperOpacity: bg.previewPath ? 0.62 : 0
+    property real wallpaperOpacity: 0
+    readonly property real maxViewZoom: 1.45
+    property real viewPanX: 0
+    property real viewPanY: 0
+    property real viewZoom: 1.0
+    property real imgWidth: 0
+    property real imgHeight: 0
+    property real imgX: 0
+    property real imgY: 0
+    property int activePaneIndex: -1
+    property bool comicMotionActive: false
+
+    readonly property var comicPaneDefs: [
+      { px: 0.14, py: 0.10, z: 1.10 },
+      { px: 0.28, py: 0.18, z: 1.18 },
+      { px: 0.20, py: 0.26, z: 1.12 },
+      { px: 0.34, py: 0.14, z: 1.24 },
+      { px: 0.10, py: 0.22, z: 1.08 },
+      { px: 0.24, py: 0.30, z: 1.16 }
+    ]
+
+    function overviewView() {
+      return { viewPanX: 0, viewPanY: 0, viewZoom: 1.0 }
+    }
+
+    function clamp01(value) {
+      return Math.max(0, Math.min(1, value))
+    }
+
+    function clampZoom(value) {
+      return Math.max(1.0, Math.min(bg.maxViewZoom, value))
+    }
+
+    function syncImageLayout() {
+      var panelW = motionStage.width
+      var panelH = motionStage.height
+      if (panelW <= 0 || panelH <= 0) return
+
+      var zoom = bg.clampZoom(bg.viewZoom)
+      var w = panelW * zoom
+      var h = panelH * zoom
+      var maxPanX = Math.max(0, w - panelW)
+      var maxPanY = Math.max(0, h - panelH)
+
+      bg.imgWidth = w
+      bg.imgHeight = h
+      bg.imgX = -(maxPanX * bg.clamp01(bg.viewPanX))
+      bg.imgY = maxPanY * bg.clamp01(bg.viewPanY)
+    }
+
+    function viewFromDef(def) {
+      return {
+        viewPanX: bg.clamp01(def.px),
+        viewPanY: bg.clamp01(def.py),
+        viewZoom: bg.clampZoom(def.z)
+      }
+    }
+
+    function jitterView(view, panSpread, zoomSpread) {
+      return {
+        viewPanX: bg.clamp01(view.viewPanX + panSpread * (Math.random() - 0.5)),
+        viewPanY: bg.clamp01(view.viewPanY + panSpread * (Math.random() - 0.5)),
+        viewZoom: bg.clampZoom(view.viewZoom + zoomSpread * (Math.random() - 0.5))
+      }
+    }
+
+    function applyView(view) {
+      bg.viewPanX = view.viewPanX
+      bg.viewPanY = view.viewPanY
+      bg.viewZoom = view.viewZoom
+      bg.syncImageLayout()
+    }
+
+    function setAmbientTargets(view, duration) {
+      var moveMs = duration || (5500 + Math.floor(Math.random() * 1700))
+      ambientPanX.from = bg.viewPanX
+      ambientPanY.from = bg.viewPanY
+      ambientZoom.from = bg.viewZoom
+      ambientPanX.to = view.viewPanX
+      ambientPanY.to = view.viewPanY
+      ambientZoom.to = view.viewZoom
+      ambientPanX.duration = moveMs
+      ambientPanY.duration = moveMs + 400
+      ambientZoom.duration = moveMs + 200
+    }
+
+    function resetMotion() {
+      bg.applyView(bg.overviewView())
+      bg.activePaneIndex = -1
+    }
+
+    function pickNextPaneIndex() {
+      if (bg.comicPaneDefs.length === 0) return 0
+      if (bg.comicPaneDefs.length <= 1) return 0
+      var next = bg.activePaneIndex
+      var guard = 0
+      while (next === bg.activePaneIndex && guard < 12) {
+        next = Math.floor(Math.random() * bg.comicPaneDefs.length)
+        guard++
+      }
+      return next
+    }
+
+    function runAmbientBeat() {
+      if (!bg.comicMotionActive) return
+      var index = bg.pickNextPaneIndex()
+      var target = bg.jitterView(bg.viewFromDef(bg.comicPaneDefs[index]), 0.04, 0.05)
+      bg.activePaneIndex = index
+      bg.setAmbientTargets(target)
+      ambientAnim.start()
+    }
+
+    function scheduleAmbientBeat() {
+      if (!bg.comicMotionActive) return
+      beatTimer.interval = 700 + Math.floor(Math.random() * 600)
+      beatTimer.start()
+    }
+
+    function stopComicMotion() {
+      bg.comicMotionActive = false
+      introTimer.stop()
+      beatTimer.stop()
+      ambientAnim.stop()
+    }
+
+    function startComicMotion() {
+      if (bg.comicMotionActive) return
+      if (!bg.previewPath || bg.wallpaperOpacity <= 0 || wallpaper.status !== Image.Ready || wallpaperFade.running)
+        return
+      if (motionStage.width <= 0 || motionStage.height <= 0) {
+        Qt.callLater(bg.startComicMotion)
+        return
+      }
+      bg.comicMotionActive = true
+      bg.applyView(bg.overviewView())
+      bg.activePaneIndex = -1
+      introTimer.restart()
+    }
+
+    function startAmbientIfReady() {
+      Qt.callLater(bg.startComicMotion)
+    }
+
+    onViewPanXChanged: bg.syncImageLayout()
+    onViewPanYChanged: bg.syncImageLayout()
+    onViewZoomChanged: bg.syncImageLayout()
 
     Rectangle {
       anchors.fill: parent
@@ -1303,59 +1448,150 @@ Panel {
       clip: true
       color: "transparent"
 
-    Image {
-      id: wallpaper
-      anchors.right: parent.right
-      anchors.top: parent.top
-      width: parent.width
-      height: parent.height
-      source: bg.previewPath ? Util.fileUrl(bg.previewPath) : ""
-      fillMode: Image.PreserveAspectCrop
-      asynchronous: true
-      visible: bg.previewPath !== "" && status === Image.Ready
-      opacity: bg.wallpaperOpacity
+      Item {
+        id: motionStage
+        anchors.fill: parent
 
-      Behavior on opacity {
-        NumberAnimation { duration: 280; easing.type: Easing.OutCubic }
+        onWidthChanged: bg.syncImageLayout()
+        onHeightChanged: bg.syncImageLayout()
+
+        Image {
+          id: wallpaper
+          anchors.top: motionStage.top
+          anchors.right: motionStage.right
+          width: bg.imgWidth > 0 ? bg.imgWidth : motionStage.width
+          height: bg.imgHeight > 0 ? bg.imgHeight : motionStage.height
+          x: bg.imgX
+          y: bg.imgY
+          source: bg.previewPath ? Util.fileUrl(bg.previewPath) : ""
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          visible: bg.previewPath !== "" && status === Image.Ready
+          opacity: bg.wallpaperOpacity
+
+          Behavior on opacity {
+            NumberAnimation { duration: 280; easing.type: Easing.OutCubic }
+          }
+        }
+      }
+
+      Shape {
+        id: fadeOverlay
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+
+        ShapePath {
+          fillRule: ShapePath.WindingFill
+          strokeWidth: 0
+          fillGradient: LinearGradient {
+            x1: fadeOverlay.width
+            y1: 0
+            x2: fadeOverlay.width * 0.66
+            y2: fadeOverlay.height * 0.66
+            GradientStop { position: 0.0; color: "transparent" }
+            GradientStop { position: 0.42; color: Qt.rgba(bg.fadeColor.r, bg.fadeColor.g, bg.fadeColor.b, 0.72) }
+            GradientStop { position: 1.0; color: bg.fadeColor }
+          }
+
+          PathSvg {
+            path: "M 0 0 L " + fadeOverlay.width + " 0 L " + fadeOverlay.width + " " + fadeOverlay.height + " L 0 " + fadeOverlay.height + " Z"
+          }
+        }
       }
     }
 
-    Shape {
-      id: fadeOverlay
-      anchors.fill: parent
-      preferredRendererType: Shape.CurveRenderer
+    ParallelAnimation {
+      id: ambientAnim
+      running: false
+      onStopped: {
+        if (bg.comicMotionActive)
+          bg.scheduleAmbientBeat()
+      }
 
-      ShapePath {
-        fillRule: ShapePath.WindingFill
-        strokeWidth: 0
-        fillGradient: LinearGradient {
-          x1: fadeOverlay.width
-          y1: 0
-          x2: fadeOverlay.width * 0.66
-          y2: fadeOverlay.height * 0.66
-          GradientStop { position: 0.0; color: "transparent" }
-          GradientStop { position: 0.42; color: Qt.rgba(bg.fadeColor.r, bg.fadeColor.g, bg.fadeColor.b, 0.72) }
-          GradientStop { position: 1.0; color: bg.fadeColor }
-        }
+      NumberAnimation {
+        id: ambientPanX
+        target: bg
+        property: "viewPanX"
+        easing.type: Easing.InOutSine
+      }
 
-        PathSvg {
-          path: "M 0 0 L " + fadeOverlay.width + " 0 L " + fadeOverlay.width + " " + fadeOverlay.height + " L 0 " + fadeOverlay.height + " Z"
-        }
+      NumberAnimation {
+        id: ambientPanY
+        target: bg
+        property: "viewPanY"
+        easing.type: Easing.InOutSine
+      }
+
+      NumberAnimation {
+        id: ambientZoom
+        target: bg
+        property: "viewZoom"
+        easing.type: Easing.InOutSine
       }
     }
+
+    Timer {
+      id: introTimer
+      running: false
+      repeat: false
+      interval: 1100
+      onTriggered: {
+        if (bg.comicMotionActive)
+          bg.runAmbientBeat()
+      }
+    }
+
+    Timer {
+      id: beatTimer
+      running: false
+      repeat: false
+      onTriggered: {
+        if (bg.comicMotionActive)
+          bg.runAmbientBeat()
+      }
+    }
+
+    Connections {
+      target: wallpaper
+      function onStatusChanged() {
+        if (wallpaper.status !== Image.Ready) return
+        bg.syncImageLayout()
+        if (bg.wallpaperOpacity > 0 && !wallpaperFade.running)
+          bg.startAmbientIfReady()
+      }
     }
 
     SequentialAnimation {
       id: wallpaperFade
       running: false
+      onStarted: bg.stopComicMotion()
+      onStopped: {
+        if (bg.previewPath && bg.wallpaperOpacity > 0)
+          bg.startAmbientIfReady()
+      }
+
       PropertyAnimation { target: bg; property: "wallpaperOpacity"; to: 0; duration: 140; easing.type: Easing.OutCubic }
+      ScriptAction { script: bg.resetMotion() }
       PropertyAction { target: wallpaper; property: "source" }
       PropertyAnimation { target: bg; property: "wallpaperOpacity"; to: 0.62; duration: 280; easing.type: Easing.OutCubic }
     }
 
     onPreviewPathChanged: {
-      if (bg.previewPath) wallpaperFade.restart()
-      else bg.wallpaperOpacity = 0
+      bg.stopComicMotion()
+      if (bg.previewPath) {
+        bg.wallpaperOpacity = 0
+        bg.resetMotion()
+        wallpaperFade.restart()
+      } else {
+        bg.wallpaperOpacity = 0
+        bg.resetMotion()
+      }
+    }
+
+    Component.onCompleted: {
+      bg.syncImageLayout()
+      if (bg.previewPath)
+        wallpaperFade.restart()
     }
   }
 
