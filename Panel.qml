@@ -160,7 +160,21 @@ Panel {
     function toggle(): void { root.toggle() }
     function toggleMode(): string { themeModes.toggleModeManual(); return themeModes.state.mode }
     function followAutomatic(): string { themeModes.followAutomatic(); return "ok" }
-    function status(): string { return JSON.stringify({ mode: themeModes.state.mode, status: themeModes.statusText }) }
+    function refreshThemes(): string { themeModes.refreshThemes(); return "ok" }
+    function status(): string {
+      return JSON.stringify({
+        mode: themeModes.state.mode,
+        manualOverride: themeModes.state.manualOverride,
+        autoEnabled: themeModes.state.autoEnabled,
+        autoSource: themeModes.state.autoSource,
+        lightTheme: themeModes.state.lightTheme,
+        darkTheme: themeModes.state.darkTheme,
+        lightBackground: themeModes.state.lightBackground,
+        darkBackground: themeModes.state.darkBackground,
+        activeTheme: themeModes.activeThemeSlug,
+        status: themeModes.statusText
+      })
+    }
   }
 
   onOpenedChanged: if (opened) {

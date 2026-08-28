@@ -8,12 +8,15 @@ All notable changes to this project will be documented in this file.
 
 - Bar widget with tabbed panel: General, Light themes, Dark themes
 - Separate light and dark theme presets with per-mode background selection
-- Infinite theme carousel with size-based selection (no loupe border)
+- Infinite theme carousel with size-based selection and floating nav orbs
 - Panel background preview from the active theme/background
 - Manual light/dark switching and automatic mode (schedule or battery)
 - Battery rule info card (dark on battery, light on power)
 - Right-click bar icon to toggle modes; middle-click to follow automatic
 - IPC target `esemczak.theme-modes` for shell integration
+- Root `preview.png` for marketplace listings
+- Real desktop screenshots in `docs/screenshots/`
+- Publishing documentation: install, remove, dependencies, security notes
 
 ### Notes
 

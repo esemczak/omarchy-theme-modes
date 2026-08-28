@@ -23,7 +23,16 @@ Item {
   property bool _writingState: false
 
   readonly property string stateFilePath: Model.statePath(Quickshell.env("HOME"))
-  readonly property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/esemczak.theme-modes"
+  readonly property string pluginDir: {
+    var scriptUrl = Qt.resolvedUrl("catalog.sh")
+    if (!scriptUrl)
+      return Quickshell.env("HOME") + "/.config/omarchy/plugins/esemczak.theme-modes"
+    var path = String(scriptUrl)
+    if (path.indexOf("file://") === 0)
+      path = path.substring(7)
+    var slash = path.lastIndexOf("/")
+    return slash >= 0 ? path.substring(0, slash) : path
+  }
   readonly property bool onBattery: UPower.onBattery === true
   readonly property string activeThemeSlug: Model.themeForMode(state)
   readonly property string statusText: Model.statusLabel(state, onBattery)
@@ -338,39 +347,5 @@ Item {
   Component.onCompleted: {
     ensureDirsProc.running = true
     refreshThemes()
-  }
-
-  IpcHandler {
-    target: "esemczak.theme-modes"
-
-    function status(): string {
-      return JSON.stringify({
-        mode: root.state.mode,
-        manualOverride: root.state.manualOverride,
-        autoEnabled: root.state.autoEnabled,
-        autoSource: root.state.autoSource,
-        lightTheme: root.state.lightTheme,
-        darkTheme: root.state.darkTheme,
-        lightBackground: root.state.lightBackground,
-        darkBackground: root.state.darkBackground,
-        activeTheme: root.activeThemeSlug,
-        status: root.statusText
-      })
-    }
-
-    function toggle(): string {
-      root.toggleModeManual()
-      return root.state.mode
-    }
-
-    function followAutomatic(): string {
-      root.followAutomatic()
-      return "ok"
-    }
-
-    function refreshThemes(): string {
-      root.refreshThemes()
-      return "ok"
-    }
   }
 }

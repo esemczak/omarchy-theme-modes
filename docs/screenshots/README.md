@@ -1,21 +1,27 @@
 # Screenshots
 
-Replace the SVG previews in this folder with real captures when you publish the repo.
+Real desktop captures live in this folder and are referenced from the root README.
 
-## Suggested shots
+| File | Source | Shows |
+|------|--------|-------|
+| `panel-general.png` | `001.png` | General tab — automatic battery switching |
+| `panel-light-themes.png` | `002.png` | Light theme carousel + background picker |
+| `panel-dark-themes.png` | `003.png` | Dark theme carousel + background picker |
 
-| File | What to capture |
-|------|-----------------|
-| `panel-general.png` | General tab: mode, switching, schedule or battery rules |
-| `panel-light-themes.png` | Light tab: theme carousel + background thumbnails |
-| `panel-dark-themes.png` | Dark tab: theme carousel + background thumbnails |
-| `bar-icon.png` | Bar widget showing sun/moon icon and tooltip |
+The marketplace listing uses [`preview.png`](../../preview.png), copied from `panel-light-themes.png`.
 
-## How to capture
+## Regenerate from new captures
 
-1. Enable the plugin and open the panel from the bar icon.
-2. Use your preferred screenshot tool (e.g. `grim`, `flameshot`).
-3. Save PNG files with the names above into this directory.
-4. Update the image paths in the root `README.md` from `.svg` to `.png`.
+Place raw PNGs in `~/Pictures/omarchy-plugin/` (or any folder), then:
 
-Keep screenshots at roughly 900–1200 px wide for readable GitHub rendering.
+```bash
+SRC=~/Pictures/omarchy-plugin
+DST=docs/screenshots
+
+magick "$SRC/001.png" -strip -resize 1200x\> "$DST/panel-general.png"
+magick "$SRC/002.png" -strip -resize 1200x\> "$DST/panel-light-themes.png"
+magick "$SRC/003.png" -strip -resize 1200x\> "$DST/panel-dark-themes.png"
+cp "$DST/panel-light-themes.png" preview.png
+```
+
+Keep screenshots at roughly 900-1200 px wide for readable GitHub rendering.

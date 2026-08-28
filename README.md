@@ -2,11 +2,13 @@
 
 Separate **light** and **dark** Omarchy themes with per-mode backgrounds, manual switching, and optional automatic mode by schedule or battery.
 
-![Panel — General tab](docs/screenshots/panel-general.svg)
+![Panel — General tab (automatic battery rules)](docs/screenshots/panel-general.png)
 
 Pick different themes for day and night, choose a background for each, and switch with one click — or let Omarchy follow the clock or power source.
 
-![Light theme picker](docs/screenshots/panel-light-themes.svg)
+![Light theme picker with backgrounds](docs/screenshots/panel-light-themes.png)
+
+![Dark theme picker with backgrounds](docs/screenshots/panel-dark-themes.png)
 
 > **Note:** Configure themes and backgrounds in this plugin's panel. Omarchy's native theme/background switchers do not update these presets (by design — no polling, no global hooks).
 
@@ -26,8 +28,11 @@ Pick different themes for day and night, choose a background for each, and switc
 
 ## Requirements
 
-- [Omarchy](https://omarchy.org) with shell plugin support
-- `jq`, `bash`, standard Omarchy theme tools (`omarchy theme`, `omarchy theme bg`)
+- [Omarchy](https://omarchy.org) with shell plugin support (Quattro)
+- `bash`, `jq`
+- Omarchy CLI tools: `omarchy theme`, `omarchy theme bg`, `omarchy-theme-switcher` (preview cache)
+
+No additional packages, sudo, or network access are required at runtime.
 
 ## Install
 
@@ -37,8 +42,6 @@ Pick different themes for day and night, choose a background for each, and switc
 omarchy plugin add https://github.com/esemczak/omarchy-theme-modes.git --enable --yes
 omarchy restart shell
 ```
-
-Replace the URL with your repository after publishing.
 
 ### Manual copy
 
@@ -51,11 +54,21 @@ omarchy plugin enable esemczak.theme-modes --section right
 omarchy restart shell
 ```
 
-### Validate before publishing
+## Remove
 
 ```bash
-omarchy plugin validate ./omarchy-theme-modes
+omarchy plugin disable esemczak.theme-modes
+omarchy plugin remove esemczak.theme-modes --yes
+omarchy restart shell
 ```
+
+Optional — delete saved plugin state:
+
+```bash
+rm -f ~/.local/state/omarchy/settings/theme-modes.json
+```
+
+Removing the plugin does not revert themes or backgrounds already applied through Omarchy.
 
 ## Usage
 
@@ -70,14 +83,23 @@ Settings persist in:
 ~/.local/state/omarchy/settings/theme-modes.json
 ```
 
+The plugin only writes that state file and invokes Omarchy theme commands when you change settings. It does not modify Hyprland, shell defaults, or other user configuration without explicit action in the panel or bar shortcuts.
+
 ## IPC
 
 Target: `esemczak.theme-modes`
 
 ```bash
-omarchy-shell esemczak.theme-modes toggle          # toggle mode manually
-omarchy-shell esemczak.theme-modes followAutomatic # switch to automatic
+omarchy-shell esemczak.theme-modes toggle          # toggle light/dark mode
+omarchy-shell esemczak.theme-modes followAutomatic # switch to automatic rules
 omarchy-shell esemczak.theme-modes status          # JSON status
+omarchy-shell esemczak.theme-modes refreshThemes    # reload theme catalog
+```
+
+## Validate before publishing
+
+```bash
+omarchy plugin validate ./omarchy-theme-modes
 ```
 
 ## Project layout
@@ -85,25 +107,28 @@ omarchy-shell esemczak.theme-modes status          # JSON status
 ```
 omarchy-theme-modes/
 ├── manifest.json      # Plugin metadata (id: esemczak.theme-modes)
+├── preview.png        # Marketplace listing preview
 ├── Panel.qml          # Bar widget + panel UI
 ├── Service.qml        # State, theme apply, auto timers
 ├── Model.js           # State parse/serialize, auto logic
 ├── catalog.sh         # Theme list + preview paths
 ├── backgrounds.sh     # Background list for a theme slug
-├── docs/screenshots/  # Replace SVG previews with PNG captures
+├── docs/screenshots/  # README screenshots
 ├── LICENSE
 └── CHANGELOG.md
 ```
 
 ## Screenshots
 
-SVG previews ship for GitHub rendering. For real captures, see [docs/screenshots/README.md](docs/screenshots/README.md).
+Real desktop captures at 1200 px wide. The root [`preview.png`](preview.png) matches the light-themes shot for marketplace listings.
 
 | Preview | Description |
 |---------|-------------|
-| [panel-general.svg](docs/screenshots/panel-general.svg) | General tab |
-| [panel-light-themes.svg](docs/screenshots/panel-light-themes.svg) | Light theme + backgrounds |
-| [bar-icon.svg](docs/screenshots/bar-icon.svg) | Bar widget tooltip |
+| [panel-general.png](docs/screenshots/panel-general.png) | General tab — automatic battery rules |
+| [panel-light-themes.png](docs/screenshots/panel-light-themes.png) | Light theme carousel + backgrounds |
+| [panel-dark-themes.png](docs/screenshots/panel-dark-themes.png) | Dark theme carousel + backgrounds |
+
+See [docs/screenshots/README.md](docs/screenshots/README.md) for capture notes.
 
 ## Development
 
@@ -118,6 +143,10 @@ Test validation after changes:
 ```bash
 omarchy plugin validate ~/.config/omarchy/plugins/esemczak.theme-modes
 ```
+
+## Security
+
+Plugins run as unsandboxed code inside `omarchy-shell`. Review the source before installing. This plugin executes local Omarchy CLI commands and reads theme/background directories on your machine; it does not download or execute remote code.
 
 ## License
 
