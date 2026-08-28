@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-label="Light theme picker preview">
+  <defs>
+    <linearGradient id="bg" x1="100%" y1="0%" x2="30%" y2="70%">
+      <stop offset="0%" stop-color="#d4a574" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f5f0e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="920" height="560" rx="24" fill="#ebe6dc"/>
+  <rect x="40" y="40" width="840" height="480" rx="18" fill="url(#bg)" stroke="#c4b8a8" stroke-width="2"/>
+  <text x="72" y="88" fill="#3e3832" font-family="sans-serif" font-size="22" font-weight="700">Theme modes</text>
+  <text x="168" y="162" fill="#3e3832" font-family="sans-serif" font-size="13" font-weight="700">Light themes</text>
+  <text x="72" y="162" fill="#8a8175" font-family="sans-serif" font-size="13">General</text>
+  <text x="292" y="162" fill="#8a8175" font-family="sans-serif" font-size="13">Dark themes</text>
+  <text x="72" y="206" fill="#8a8175" font-family="sans-serif" font-size="11" letter-spacing="1">CHOOSE LIGHT THEME</text>
+  <rect x="72" y="230" width="36" height="120" rx="8" fill="#fff" stroke="#c4b8a8"/>
+  <text x="84" y="292" fill="#8a8175" font-family="sans-serif" font-size="18">À</text>
+  <rect x="120" y="250" width="70" height="80" rx="8" fill="#fff" stroke="#c4b8a8" opacity="0.7"/>
+  <rect x="200" y="235" width="85" height="95" rx="8" fill="#fff" stroke="#c4b8a8" opacity="0.85"/>
+  <rect x="295" y="218" width="100" height="112" rx="10" fill="#fff" stroke="#b8860b" stroke-width="3"/>
+  <rect x="405" y="235" width="85" height="95" rx="8" fill="#fff" stroke="#c4b8a8" opacity="0.85"/>
+  <rect x="500" y="250" width="70" height="80" rx="8" fill="#fff" stroke="#c4b8a8" opacity="0.7"/>
+  <rect x="580" y="230" width="36" height="120" rx="8" fill="#fff" stroke="#c4b8a8"/>
+  <text x="592" y="292" fill="#8a8175" font-family="sans-serif" font-size="18">¶</text>
+  <text x="320" y="352" fill="#3e3832" font-family="sans-serif" font-size="14" font-weight="700" text-anchor="middle">Flexoki Light</text>
+  <text x="72" y="392" fill="#8a8175" font-family="sans-serif" font-size="11" letter-spacing="1">BACKGROUND</text>
+  <rect x="72" y="408" width="64" height="64" rx="8" fill="#fff" stroke="#b8860b" stroke-width="2"/>
+  <rect x="148" y="408" width="64" height="64" rx="8" fill="#fff" stroke="#c4b8a8"/>
+  <rect x="224" y="408" width="64" height="64" rx="8" fill="#fff" stroke="#c4b8a8"/>
+  <rect x="300" y="408" width="64" height="64" rx="8" fill="#fff" stroke="#c4b8a8"/>
+</svg>
