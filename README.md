@@ -112,7 +112,8 @@ omarchy-theme-modes/
 ├── Service.qml        # State, theme apply, auto timers
 ├── Model.js           # State parse/serialize, auto logic
 ├── lib/
-│   └── security.sh      # Slug/path validation and safe file helpers
+│   ├── security.sh      # Slug/path validation helpers (bash)
+│   └── security_core.py # Descriptor-safe I/O and bounded subprocess reads
 ├── bootstrap-state.sh   # Safe read of plugin state + current theme
 ├── safe-write-state.sh  # Atomic bounded write of plugin state
 ├── catalog.sh           # Theme list + preview paths
@@ -161,6 +162,7 @@ Hardening measures in this release:
 - Plugin state and the current theme name are read through no-follow, regular-file helpers with byte limits; state is written atomically into a verified private directory.
 - Theme/background catalog helpers run under `timeout`, cap stdout before QML parsing, and only expose image paths that resolve under anchored Omarchy theme/background or cache roots after no-follow regular-file checks.
 - Catalog and background helpers enforce producer-side ceilings on input line bytes, field/path bytes, record counts, and total emitted JSON bytes; QML collectors terminate processes once stdout exceeds the matching limit during streaming.
+- Descriptor-safe helpers open private directories once, perform atomic writes via `dir_fd`, read regular files through bounded loops, materialize validated images into a private cache bound to the validated fd, and read theme lists from child pipes incrementally with deadlines.
 
 ## License
 

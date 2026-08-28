@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
-- Enforce producer-side byte/record ceilings in catalog and background helpers (line, field, record, and total JSON limits)
-- Terminate catalog/background processes from QML when streamed stdout exceeds the producer contract limit
+- Add descriptor-safe I/O core: held directory fds, bounded read loops, verified-image cache materialization
+- Read theme names from child stdout incrementally in binary mode with deadline and byte ceilings
 
 ## [1.0.1] - 2026-08-29
 

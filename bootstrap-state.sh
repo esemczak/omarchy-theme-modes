@@ -9,19 +9,13 @@ source "$script_dir/lib/security.sh"
 state_raw=""
 current_theme=""
 
-if state_dir=$(theme_modes_state_directory 2>/dev/null); then
-  if [[ -f $theme_modes_state_file && ! -L $theme_modes_state_file ]]; then
-    state_raw=$(safe_read_regular_file "$theme_modes_state_file" "$THEME_MODES_MAX_STATE_BYTES" 2>/dev/null || true)
-  fi
-fi
+theme_modes_state_directory >/dev/null
+state_raw=$(safe_read_regular_file "$theme_modes_state_file" "$THEME_MODES_MAX_STATE_BYTES" 2>/dev/null || true)
 
-if current_dir=$(theme_modes_current_theme_directory 2>/dev/null); then
-  if [[ -f $theme_modes_current_theme_file && ! -L $theme_modes_current_theme_file ]]; then
-    current_theme=$(safe_read_regular_file "$theme_modes_current_theme_file" "$THEME_MODES_MAX_THEME_NAME_BYTES" 2>/dev/null || true)
-    current_theme=${current_theme//$'\n'/}
-    current_theme=${current_theme//$'\r'/}
-  fi
-fi
+theme_modes_current_theme_directory >/dev/null
+current_theme=$(safe_read_regular_file "$theme_modes_current_theme_file" "$THEME_MODES_MAX_THEME_NAME_BYTES" 2>/dev/null || true)
+current_theme=${current_theme//$'\n'/}
+current_theme=${current_theme//$'\r'/}
 
 jq -cn \
   --arg state "$state_raw" \

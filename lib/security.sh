@@ -19,12 +19,19 @@ readonly THEME_MODES_IMAGE_EXTENSIONS='jpg jpeg png gif bmp webp'
 theme_modes_json_bytes=0
 theme_modes_json_records=0
 
+theme_modes_lib_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
 theme_modes_home="${HOME:?HOME is required}"
 theme_modes_state_file="$theme_modes_home/.local/state/omarchy/settings/theme-modes.json"
 theme_modes_current_theme_file="$theme_modes_home/.local/state/omarchy/current/theme.name"
 theme_modes_preview_dir="${XDG_CACHE_HOME:-$theme_modes_home/.cache}/omarchy/theme-selector/previews"
 theme_modes_image_cache_dir="${XDG_CACHE_HOME:-$theme_modes_home/.cache}/omarchy/image-selector"
+theme_modes_verified_image_cache_dir="${XDG_CACHE_HOME:-$theme_modes_home/.cache}/omarchy/theme-modes/verified-images"
 theme_modes_omarchy_path="${OMARCHY_PATH:-/usr/share/omarchy}"
+
+_security_py() {
+  python3 "$theme_modes_lib_dir/security_core.py" "$@"
+}
 
 is_valid_slug() {
   local slug="${1:-}"
@@ -58,26 +65,8 @@ path_is_under_root() {
 
 ensure_private_directory() {
   local dir="$1"
-  local resolved parent
-
   [[ -n $dir ]] || return 1
-  if [[ -e $dir && -L $dir ]]; then
-    return 1
-  fi
-  mkdir -p -- "$dir" || return 1
-  resolved=$(readlink -f -- "$dir" 2>/dev/null) || return 1
-  if [[ -L $resolved ]]; then
-    return 1
-  fi
-  chmod 700 -- "$resolved" 2>/dev/null || true
-  parent=$(dirname -- "$resolved")
-  while [[ $parent != "/" && -n $parent ]]; do
-    if [[ -L $parent ]]; then
-      return 1
-    fi
-    parent=$(dirname -- "$parent")
-  done
-  printf '%s' "$resolved"
+  _security_py ensure-dir "$dir"
 }
 
 theme_modes_state_directory() {
@@ -91,74 +80,13 @@ theme_modes_current_theme_directory() {
 safe_read_regular_file() {
   local path="$1"
   local max_bytes="${2:-4096}"
-  python3 - "$path" "$max_bytes" <<'PY'
-import os
-import stat
-import sys
-
-path = sys.argv[1]
-max_bytes = int(sys.argv[2])
-
-try:
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-except OSError:
-    sys.exit(1)
-
-try:
-    st = os.fstat(fd)
-    if not stat.S_ISREG(st.st_mode):
-        sys.exit(2)
-    if st.st_size > max_bytes:
-        sys.exit(3)
-    data = os.read(fd, max_bytes + 1)
-    if len(data) > max_bytes:
-        sys.exit(3)
-    sys.stdout.buffer.write(data)
-finally:
-    os.close(fd)
-PY
+  _security_py read-regular "$path" "$max_bytes"
 }
 
 safe_write_regular_file() {
   local path="$1"
   local max_bytes="${2:-65536}"
-  python3 - "$path" "$max_bytes" <<'PY'
-import os
-import stat
-import sys
-import tempfile
-
-path = sys.argv[1]
-max_bytes = int(sys.argv[2])
-data = sys.stdin.buffer.read(max_bytes + 1)
-if len(data) > max_bytes:
-    sys.exit(3)
-
-directory = os.path.dirname(path) or "."
-os.makedirs(directory, mode=0o700, exist_ok=True)
-
-if os.path.lexists(path):
-    try:
-        st = os.lstat(path)
-    except OSError:
-        sys.exit(4)
-    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
-        sys.exit(4)
-
-fd, tmp_path = tempfile.mkstemp(prefix=".theme-modes.", dir=directory)
-try:
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp_path, path)
-except Exception:
-    try:
-        os.unlink(tmp_path)
-    except OSError:
-        pass
-    raise
-PY
+  _security_py write-regular "$path" "$max_bytes"
 }
 
 image_extension_for() {
@@ -177,14 +105,10 @@ verify_regular_image_under() {
   local path="$1"
   local root="$2"
   local max_bytes="${3:-$THEME_MODES_MAX_IMAGE_BYTES}"
-  local resolved
 
   [[ -n $path && -n $root ]] || return 1
   image_extension_for "$path" >/dev/null || return 1
-  safe_read_regular_file "$path" "$max_bytes" >/dev/null || return 1
-  resolved=$(readlink -f -- "$path" 2>/dev/null) || return 1
-  path_is_under_root "$root" "$resolved" || return 1
-  printf '%s' "$resolved"
+  _security_py materialize-image "$path" "$root" "$max_bytes" "$theme_modes_verified_image_cache_dir"
 }
 
 theme_dir_for_slug() {
@@ -229,7 +153,7 @@ verify_background_path() {
   [[ -n $path ]] || return 1
   while IFS= read -r root; do
     [[ -n $root ]] || continue
-    verified=$(verify_regular_image_under "$path" "$root" "$THEME_MODES_MAX_IMAGE_BYTES" 2>/dev/null || true)
+    verified=$(_security_py materialize-image "$path" "$root" "$THEME_MODES_MAX_IMAGE_BYTES" "$theme_modes_verified_image_cache_dir" 2>/dev/null || true)
     if [[ -n $verified ]]; then
       printf '%s' "$verified"
       return 0
@@ -252,19 +176,14 @@ theme_preview_roots_for_slug() {
 verify_preview_path() {
   local slug="$1"
   local path="$2"
-  local root verified resolved
+  local root verified
 
   is_valid_slug "$slug" || return 1
   [[ -n $path && -e $path ]] || return 1
 
-  if [[ -L $path ]]; then
-    resolved=$(readlink -f -- "$path" 2>/dev/null) || return 1
-    path="$resolved"
-  fi
-
   while IFS= read -r root; do
     [[ -n $root ]] || continue
-    verified=$(verify_regular_image_under "$path" "$root" "$THEME_MODES_MAX_IMAGE_BYTES" 2>/dev/null || true)
+    verified=$(_security_py materialize-image "$path" "$root" "$THEME_MODES_MAX_IMAGE_BYTES" "$theme_modes_verified_image_cache_dir" 2>/dev/null || true)
     if [[ -n $verified ]]; then
       printf '%s' "$verified"
       return 0
@@ -279,7 +198,7 @@ verify_thumbnail_path() {
 
   [[ -n $path ]] || return 1
   ensure_private_directory "$theme_modes_image_cache_dir" >/dev/null || return 1
-  verified=$(verify_regular_image_under "$path" "$theme_modes_image_cache_dir" "$THEME_MODES_MAX_IMAGE_BYTES" 2>/dev/null || true)
+  verified=$(_security_py materialize-image "$path" "$theme_modes_image_cache_dir" "$THEME_MODES_MAX_IMAGE_BYTES" "$theme_modes_verified_image_cache_dir" 2>/dev/null || true)
   [[ -n $verified ]] || return 1
   printf '%s' "$verified"
 }
@@ -345,47 +264,9 @@ json_emit_finish() {
 }
 
 bounded_theme_names() {
-  python3 - "$THEME_MODES_MAX_CATALOG_RECORDS" "$THEME_MODES_MAX_INPUT_LINE_BYTES" <<'PY'
-import subprocess
-import sys
-
-max_lines = int(sys.argv[1])
-max_line_bytes = int(sys.argv[2])
-
-try:
-    proc = subprocess.Popen(
-        ["omarchy", "theme", "list"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-except OSError:
-    raise SystemExit(0)
-
-count = 0
-try:
-    assert proc.stdout is not None
-    for raw in proc.stdout:
-        if count >= max_lines:
-            break
-        line = raw.rstrip("\r\n")
-        encoded = line.encode("utf-8", errors="replace")
-        if len(encoded) > max_line_bytes:
-            line = encoded[:max_line_bytes].decode("utf-8", errors="ignore")
-        line = line.strip()
-        if not line:
-            continue
-        print(line)
-        count += 1
-finally:
-    if proc.stdout is not None:
-        proc.stdout.close()
-    try:
-        proc.wait(timeout=20)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-PY
+  _security_py bounded-theme-names \
+    "$THEME_MODES_MAX_CATALOG_RECORDS" \
+    "$THEME_MODES_MAX_INPUT_LINE_BYTES" \
+    20 \
+    $((THEME_MODES_MAX_CATALOG_RECORDS * THEME_MODES_MAX_INPUT_LINE_BYTES))
 }
-
